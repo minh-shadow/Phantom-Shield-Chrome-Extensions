@@ -1,10 +1,3 @@
-['copy', 'paste', 'cut', 'contextmenu'].forEach(eventType => {
-  document.addEventListener(eventType, (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  });
-});
-
 const keys = ['master', 'mouseleave', 'clipboard', 'contextmenu', 'fullscreen', 'visibility'];
 const DEFAULTS = {
   master: true,

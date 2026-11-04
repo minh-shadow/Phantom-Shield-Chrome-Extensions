@@ -6,9 +6,12 @@
   try { Object.defineProperty(window, GUARD, { value: true, enumerable: false }); }
   catch (e) { window[GUARD] = true; }
 
-  var EV_CFG = '__ps_cfg_v2';
-  var EV_REQ = '__ps_req_v2';
+  // Kênh cấu hình: content.js gửi "hello" kèm khóa ngẫu nhiên đúng 1 lần ngay lúc document_start.
+  // Sau đó mọi cấu hình đi qua sự kiện có tên chứa khóa này, nên trang không thể giả cấu hình
+  // hay đọc cấu hình bằng tên sự kiện cố định. Hello đến sau lần đầu bị bỏ qua.
+  var EV_HELLO = '__ps_hello_v3';
   var NARROW_PX = 700;
+  var cfgName = null;
 
   var state = { fullscreen: true, visibility: true };
 
@@ -19,11 +22,22 @@
       state.visibility = !!c.visibility;
     } catch (err) {}
   }
-  window.addEventListener(EV_CFG, onCfg);
+
+  function onHello(e) {
+    if (cfgName) return;
+    var k = e && e.detail;
+    if (typeof k !== 'string' || !/^[a-z0-9]{20,64}$/.test(k)) return;
+    cfgName = '__ps_' + k;
+    try { window.removeEventListener(EV_HELLO, onHello); } catch (err) {}
+    window.addEventListener(cfgName, onCfg);
+  }
+  window.addEventListener(EV_HELLO, onHello);
 
   try {
     new MutationObserver(function () {
-      window.addEventListener(EV_CFG, onCfg);
+      // document.open() xóa listener: gắn lại
+      if (cfgName) window.addEventListener(cfgName, onCfg);
+      else window.addEventListener(EV_HELLO, onHello);
     }).observe(document, { childList: true });
   } catch (e) {}
 
@@ -118,6 +132,5 @@
   hookGetter(window, 'outerWidth', sizeActive, function () { return window.screen.width; });
   hookGetter(window, 'outerHeight', sizeActive, function () { return window.screen.height; });
 
-  try { window.dispatchEvent(new CustomEvent(EV_REQ)); } catch (e) {}
 })();
 

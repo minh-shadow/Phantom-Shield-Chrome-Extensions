@@ -6,10 +6,19 @@
   }
   if (!isContextValid()) return;
 
-  var EV_TAKEOVER = '__ps_takeover_v2';
-  var EV_CFG = '__ps_cfg_v2';
-  var EV_REQ = '__ps_req_v2';
-  var INSTANCE_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  var EV_HELLO = '__ps_hello_v3';
+
+  // Khóa ngẫu nhiên dùng làm tên sự kiện cấu hình gửi sang spoof.js (MAIN world).
+  // Trang không biết khóa nên không giả được cấu hình và không đọc được cấu hình.
+  function makeKey() {
+    var a = new Uint8Array(12);
+    try { crypto.getRandomValues(a); } catch (e) { for (var i = 0; i < a.length; i++) a[i] = Math.random() * 256; }
+    var out = '';
+    for (var j = 0; j < a.length; j++) out += ('0' + a[j].toString(16)).slice(-2);
+    return out;
+  }
+  var KEY = makeKey();
+  var EV_CFG = '__ps_' + KEY;
 
   var DEFAULTS = { mouseleave: true, clipboard: true, contextmenu: true, fullscreen: true, visibility: true };
 
@@ -43,12 +52,21 @@
     disposers.splice(0).forEach(function (f) { try { f(); } catch (e) {} });
   }
 
-  on(window, EV_TAKEOVER, function (e) { if (e.detail !== INSTANCE_ID) dispose(); });
-  try { window.dispatchEvent(new CustomEvent(EV_TAKEOVER, { detail: INSTANCE_ID })); } catch (e) {}
+  // Bản cũ (nạp lại bằng executeScript) nằm trong isolated world nên trang không thấy, không tác động được.
+  try {
+    if (typeof window.__psDispose === 'function') window.__psDispose();
+    window.__psDispose = dispose;
+  } catch (e) {}
+  try { window.dispatchEvent(new CustomEvent(EV_HELLO, { detail: KEY })); } catch (e) {}
+
+  var SELECT_CSS = '*:not(input):not(textarea):not(select):not(button):not([contenteditable]),' +
+                   '*::before,*::after{-webkit-user-select:text !important;user-select:text !important}';
+  var selectSheet = null, selectStyleEl = null;
 
   var config = Object.assign({}, DEFAULTS);
 
   function pushToSpoof() {
+    try { applySelectCss(); } catch (e) {}
     try {
       window.dispatchEvent(new CustomEvent(EV_CFG, {
         detail: JSON.stringify({
@@ -58,8 +76,6 @@
       }));
     } catch (e) {}
   }
-
-  on(window, EV_REQ, function () { pushToSpoof(); });
 
   try {
     chrome.storage.local.get(DEFAULTS, function (r) {
@@ -89,6 +105,8 @@
     'visibilitychange', 'webkitvisibilitychange', 'blur', 'focus',
     'focusin', 'focusout'
   ];
+  // Chỉ gắn ở window (capture) để nhẹ hơn
+  var WINDOW_ONLY_EVENTS = ['selectstart', 'dragstart', 'keydown', 'mousemove', 'freeze', 'resume'];
   var MOUSE_EVENTS = { mouseleave: 1, mouseout: 1, pointerleave: 1, pointerout: 1 };
   var CLIP_EVENTS = { copy: 1, paste: 1, cut: 1 };
   var FS_EVENTS = { fullscreenchange: 1, webkitfullscreenchange: 1, mozfullscreenchange: 1, MSFullscreenChange: 1 };
@@ -100,8 +118,41 @@
     catch (e) { return false; }
   }
 
+  function isEditable(t) {
+    try {
+      if (!t || t.nodeType !== 1) return false;
+      var n = t.nodeName;
+      return n === 'INPUT' || n === 'TEXTAREA' || n === 'SELECT' || !!t.isContentEditable;
+    } catch (err) { return false; }
+  }
+  function inDraggable(t) {
+    try { return !!(t && t.nodeType === 1 && t.closest && t.closest('[draggable="true"],a[href],img')); }
+    catch (err) { return false; }
+  }
+
+  // Phím mà trang hay preventDefault để chặn sao chép / xem nguồn / mở DevTools
+  function isGuardedKey(e) {
+    if (e.altKey) return false;
+    var k = (e.key || '').toLowerCase();
+    var mod = e.ctrlKey || e.metaKey;
+    if (e.key === 'F12') return config.contextmenu;
+    if (!mod) return false;
+    if (!e.shiftKey && (k === 'u')) return config.contextmenu;
+    if (e.shiftKey && (k === 'i' || k === 'j' || k === 'c')) return config.contextmenu;
+    if (!e.shiftKey && (k === 'c' || k === 'v' || k === 'x' || k === 'a')) {
+      return config.clipboard && !isEditable(e.target);
+    }
+    return false;
+  }
+
   function shouldBlock(e) {
     var t = e.type;
+
+    if (t === 'selectstart') return config.clipboard && !clipboardAllowed && !isEditable(e.target);
+    if (t === 'dragstart') return config.clipboard && !clipboardAllowed && !inDraggable(e.target);
+    if (t === 'keydown') return !clipboardAllowed && isGuardedKey(e);
+    if (t === 'mousemove') return config.mouseleave && e.clientY <= 0 && !e.buttons;
+    if (t === 'freeze' || t === 'resume') return config.visibility;
 
     if (MOUSE_EVENTS[t]) return config.mouseleave;
     if (CLIP_EVENTS[t]) return config.clipboard && !clipboardAllowed;
@@ -130,6 +181,38 @@
     on(window, type, blockHandler, true);
     on(document, type, blockHandler, true);
   });
+  WINDOW_ONLY_EVENTS.forEach(function (type) {
+    on(window, type, blockHandler, true);
+  });
+
+  // CSS user-select: none do trang áp lên văn bản -> ghi đè khi bật "clipboard"
+  function applySelectCss() {
+    if (dead) return;
+    var want = !!config.clipboard && !clipboardAllowed;
+    try {
+      if (typeof CSSStyleSheet === 'function' && 'adoptedStyleSheets' in document) {
+        if (want) {
+          if (!selectSheet) { selectSheet = new CSSStyleSheet(); selectSheet.replaceSync(SELECT_CSS); }
+          if (document.adoptedStyleSheets.indexOf(selectSheet) === -1) {
+            document.adoptedStyleSheets = document.adoptedStyleSheets.concat([selectSheet]);
+          }
+        } else if (selectSheet) {
+          document.adoptedStyleSheets = document.adoptedStyleSheets.filter(function (x) { return x !== selectSheet; });
+        }
+        return;
+      }
+    } catch (err) {}
+    try {
+      if (want) {
+        if (!selectStyleEl || !selectStyleEl.isConnected) {
+          selectStyleEl = document.createElement('style');
+          selectStyleEl.textContent = SELECT_CSS;
+          (document.head || document.documentElement).appendChild(selectStyleEl);
+        }
+      } else if (selectStyleEl) { selectStyleEl.remove(); selectStyleEl = null; }
+    } catch (err2) {}
+  }
+  disposers.push(function () { config.clipboard = false; applySelectCss(); });
 
   function showToast(isEnabled) {
     var existingToast = document.getElementById('mlb-3d-toast');
@@ -174,6 +257,7 @@
     var reopenObserver = new MutationObserver(function () {
       if (dead) return;
       rebind();
+      applySelectCss();
       pushToSpoof();
     });
     reopenObserver.observe(document, { childList: true });
