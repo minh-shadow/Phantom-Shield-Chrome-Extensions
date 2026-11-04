@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Phantom_Shield-Browse_Freely-181717?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Phantom Shield">
-  <img src="https://img.shields.io/badge/Version-5.1.0-blue?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-5.3.0-blue?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Manifest-V3-34A853?style=for-the-badge" alt="Manifest V3">
   <img src="https://img.shields.io/badge/Platform-Chrome-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome">
 </p>
