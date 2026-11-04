@@ -1,4 +1,4 @@
-# 👻 Phantom Shield (Beta)
+# 👻 Phantom Shield 
 
 <p align="center">
   <img src="https://img.shields.io/badge/Phantom_Shield-Browse_Freely-181717?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Phantom Shield">
