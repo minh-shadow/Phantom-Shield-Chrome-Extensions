@@ -1,78 +1,145 @@
 (function () {
   'use strict';
 
-  // Hàm kiểm tra xem extension còn hoạt động (context hợp lệ) hay đã bị reload
   function isContextValid() {
-    return !!(chrome.runtime && chrome.runtime.id);
+    try { return !!(chrome.runtime && chrome.runtime.id); } catch (e) { return false; }
+  }
+  if (!isContextValid()) return;
+
+  var EV_TAKEOVER = '__ps_takeover_v2';
+  var EV_CFG = '__ps_cfg_v2';
+  var EV_REQ = '__ps_req_v2';
+  var INSTANCE_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  var DEFAULTS = { mouseleave: true, clipboard: true, contextmenu: true, fullscreen: true, visibility: true };
+
+  var CLIPBOARD_ALLOW_HOSTS = [];
+
+  var FULLSCREEN_SKIP_HOSTS = ['youtube.com', 'youtu.be', 'netflix.com', 'twitch.tv', 'vimeo.com',
+                               'chatgpt.com', 'chat.openai.com', 'chat.deepseek.com', 'claude.ai'];
+
+  function hostMatches(list) {
+    var h = location.hostname || '';
+    return list.some(function (d) { return h === d || h.endsWith('.' + d); });
+  }
+  var clipboardAllowed = hostMatches(CLIPBOARD_ALLOW_HOSTS);
+  var fullscreenSkipped = hostMatches(FULLSCREEN_SKIP_HOSTS);
+
+  var disposers = [];
+  var regs = [];
+  var dead = false;
+  function on(target, type, fn, opts) {
+    target.addEventListener(type, fn, opts);
+    regs.push({ target: target, type: type, fn: fn, opts: opts });
+  }
+  function rebind() {
+    if (dead) return;
+    regs.forEach(function (r) { try { r.target.addEventListener(r.type, r.fn, r.opts); } catch (e) {} });
+  }
+  function dispose() {
+    if (dead) return;
+    dead = true;
+    regs.splice(0).forEach(function (r) { try { r.target.removeEventListener(r.type, r.fn, r.opts); } catch (e) {} });
+    disposers.splice(0).forEach(function (f) { try { f(); } catch (e) {} });
   }
 
-  let config = {
-    mouseleave: true, clipboard: true, contextmenu: true, fullscreen: true, visibility: true
-  };
+  on(window, EV_TAKEOVER, function (e) { if (e.detail !== INSTANCE_ID) dispose(); });
+  try { window.dispatchEvent(new CustomEvent(EV_TAKEOVER, { detail: INSTANCE_ID })); } catch (e) {}
 
-  let blockedEvents = new Set();
-  const ALL_EVENTS = [
-    'mouseleave', 'mouseout', 'copy', 'paste', 'cut',
+  var config = Object.assign({}, DEFAULTS);
+
+  function pushToSpoof() {
+    try {
+      window.dispatchEvent(new CustomEvent(EV_CFG, {
+        detail: JSON.stringify({
+          fullscreen: !!config.fullscreen && !fullscreenSkipped,
+          visibility: !!config.visibility
+        })
+      }));
+    } catch (e) {}
+  }
+
+  on(window, EV_REQ, function () { pushToSpoof(); });
+
+  try {
+    chrome.storage.local.get(DEFAULTS, function (r) {
+      if (dead || chrome.runtime.lastError || !r) return;
+      for (var k in DEFAULTS) config[k] = (r[k] !== undefined) ? !!r[k] : DEFAULTS[k];
+      pushToSpoof();
+    });
+
+    var onChanged = function (changes, area) {
+      if (dead || area !== 'local') return;
+      for (var k in DEFAULTS) {
+        if (changes[k]) config[k] = (changes[k].newValue !== undefined) ? !!changes[k].newValue : DEFAULTS[k];
+      }
+      pushToSpoof();
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    disposers.push(function () { try { chrome.storage.onChanged.removeListener(onChanged); } catch (e) {} });
+  } catch (e) {}
+
+  pushToSpoof();
+
+  var ALL_EVENTS = [
+    'mouseleave', 'mouseout', 'pointerleave', 'pointerout',
+    'copy', 'paste', 'cut',
     'resize', 'fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange',
-    'contextmenu', 'visibilitychange', 'blur', 'focus'
+    'contextmenu',
+    'visibilitychange', 'webkitvisibilitychange', 'blur', 'focus',
+    'focusin', 'focusout'
   ];
+  var MOUSE_EVENTS = { mouseleave: 1, mouseout: 1, pointerleave: 1, pointerout: 1 };
+  var CLIP_EVENTS = { copy: 1, paste: 1, cut: 1 };
+  var FS_EVENTS = { fullscreenchange: 1, webkitfullscreenchange: 1, mozfullscreenchange: 1, MSFullscreenChange: 1 };
+  var VIS_EVENTS = { visibilitychange: 1, webkitvisibilitychange: 1 };
+  var FOCUSIN_EVENTS = { focusin: 1, focusout: 1 };
 
-  function updateBlockedEvents() {
-    blockedEvents.clear();
-    if (config.mouseleave) { blockedEvents.add('mouseleave'); blockedEvents.add('mouseout'); }
-    if (config.clipboard) { blockedEvents.add('copy'); blockedEvents.add('paste'); blockedEvents.add('cut'); }
-    if (config.fullscreen) { 
-      blockedEvents.add('resize'); blockedEvents.add('fullscreenchange'); 
-      blockedEvents.add('webkitfullscreenchange'); blockedEvents.add('mozfullscreenchange'); 
-      blockedEvents.add('MSFullscreenChange'); 
-    }
-    if (config.contextmenu) { blockedEvents.add('contextmenu'); }
-    if (config.visibility) { blockedEvents.add('visibilitychange'); blockedEvents.add('blur'); blockedEvents.add('focus'); }
+  function isVideoTarget(t) {
+    try { return !!t && (t.tagName === 'VIDEO' || (t.querySelector && t.querySelector('video'))); }
+    catch (e) { return false; }
   }
 
-  if (isContextValid()) {
-    chrome.storage.local.get(config, function (r) {
-      if (chrome.runtime.lastError) return;
-      config = r;
-      updateBlockedEvents();
-      if (config.fullscreen || config.visibility) {
-        const script = document.createElement('script');
-        script.src = chrome.runtime.getURL(`spoof.js?fs=${config.fullscreen}&vis=${config.visibility}`);
-        (document.head || document.documentElement).appendChild(script);
-        script.onload = () => script.remove();
-      }
-    });
+  function shouldBlock(e) {
+    var t = e.type;
 
-    chrome.storage.onChanged.addListener(function (changes, area) {
-      if (area === 'local') {
-        for (let key in changes) { 
-          if (key !== 'master') config[key] = changes[key].newValue; 
-        }
-        updateBlockedEvents();
-      }
-    });
+    if (MOUSE_EVENTS[t]) return config.mouseleave;
+    if (CLIP_EVENTS[t]) return config.clipboard && !clipboardAllowed;
+    if (t === 'contextmenu') return config.contextmenu && !clipboardAllowed;
+
+    if (t === 'resize') return config.fullscreen;
+    if (FS_EVENTS[t]) return config.fullscreen && !fullscreenSkipped && !isVideoTarget(e.target);
+
+    if (VIS_EVENTS[t]) return config.visibility;
+    if (t === 'blur' || t === 'focus') return config.visibility;
+    if (FOCUSIN_EVENTS[t]) {
+      if (!config.visibility) return false;
+      if (e.target === window || e.target === document) return true;
+      try { return !document.hasFocus(); } catch (err) { return false; }
+    }
+    return false;
   }
 
   function blockHandler(e) {
-    if (blockedEvents.has(e.type)) {
+    if (shouldBlock(e)) {
       e.stopImmediatePropagation();
       e.stopPropagation();
     }
   }
   ALL_EVENTS.forEach(function (type) {
-    window.addEventListener(type, blockHandler, true);
-    document.addEventListener(type, blockHandler, true);
+    on(window, type, blockHandler, true);
+    on(document, type, blockHandler, true);
   });
 
   function showToast(isEnabled) {
-    const existingToast = document.getElementById('mlb-3d-toast');
+    var existingToast = document.getElementById('mlb-3d-toast');
     if (existingToast) existingToast.remove();
 
-    const container = document.createElement('div');
+    var container = document.createElement('div');
     container.id = 'mlb-3d-toast';
-    const shadow = container.attachShadow({ mode: 'open' });
+    var shadow = container.attachShadow({ mode: 'open' });
 
-    const style = document.createElement('style');
+    var style = document.createElement('style');
     style.textContent = `
       .toast-box {
         position: fixed; top: 30px; left: 50%;
@@ -88,74 +155,76 @@
       .toast-box.show { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
     `;
 
-    const box = document.createElement('div');
-    box.className = `toast-box ${isEnabled ? 'on' : 'off'}`;
-    box.innerHTML = isEnabled ? '⚡ ĐÃ BẬT TẤT CẢ' : '💤 ĐÃ TẮT TẤT CẢ';
+    var box = document.createElement('div');
+    box.className = 'toast-box ' + (isEnabled ? 'on' : 'off');
+    box.textContent = isEnabled ? '⚡ ĐÃ BẬT TẤT CẢ' : '💤 ĐÃ TẮT TẤT CẢ';
 
     shadow.appendChild(style);
     shadow.appendChild(box);
-    document.documentElement.appendChild(container);
+    (document.documentElement || document).appendChild(container);
 
-    requestAnimationFrame(() => box.classList.add('show'));
-    setTimeout(() => {
+    requestAnimationFrame(function () { box.classList.add('show'); });
+    setTimeout(function () {
       box.classList.remove('show');
-      setTimeout(() => container.remove(), 600);
+      setTimeout(function () { container.remove(); }, 600);
     }, 2500);
   }
 
-  window.addEventListener('keydown', function (e) {
+  try {
+    var reopenObserver = new MutationObserver(function () {
+      if (dead) return;
+      rebind();
+      pushToSpoof();
+    });
+    reopenObserver.observe(document, { childList: true });
+    disposers.push(function () { try { reopenObserver.disconnect(); } catch (e) {} });
+  } catch (e) {}
+
+  var RELOAD_MSG = 'Extension vừa được reload, vui lòng F5 trang web.';
+
+  function send(msg) {
+    try {
+      var p = chrome.runtime.sendMessage(msg);
+      if (p && typeof p.catch === 'function') p.catch(function () { console.log(RELOAD_MSG); });
+    } catch (err) {
+      console.log(RELOAD_MSG);
+    }
+  }
+
+  function isTopFrame() {
+    try { return window === window.top; } catch (err) { return false; }
+  }
+
+  var onRuntimeMessage = function (msg) {
+    if (dead || !msg || msg.action !== 'toast') return;
+    if (isTopFrame()) showToast(!!msg.on);
+  };
+  try {
+    chrome.runtime.onMessage.addListener(onRuntimeMessage);
+    disposers.push(function () { try { chrome.runtime.onMessage.removeListener(onRuntimeMessage); } catch (e) {} });
+  } catch (e) {}
+
+  var HOTKEYS = {
+    KeyZ: { action: 'toggle-all' },
+    KeyX: { action: 'open-window', appId: 'google' },
+    KeyC: { action: 'open-window', appId: 'chatgpt' },
+    KeyV: { action: 'open-window', appId: 'deepseek' },
+    KeyB: { action: 'open-window', appId: 'claude' },
+    KeyD: { action: 'close-windows' }
+  };
+
+  on(window, 'keydown', function (e) {
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
-    if (e.repeat) { if (/^Key[ZXCVBD]$/.test(e.code)) { e.preventDefault(); e.stopImmediatePropagation(); } return; }
-    
-    // Nếu extension đã bị reload, bỏ qua không làm gì cả để tránh lỗi
-    if (!isContextValid()) return;
+    var code = e.code || ('Key' + (e.key || '').toUpperCase());
+    var hotkey = HOTKEYS[code];
+    if (!hotkey) return;
 
-    const code = e.code || ('Key' + (e.key || '').toUpperCase());
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (e.repeat) return;
+    if (!isContextValid()) { console.log(RELOAD_MSG); return; }
 
-    if (code === 'KeyZ') {
-      e.preventDefault(); e.stopImmediatePropagation();
-      chrome.storage.local.get({ mouseleave: true, clipboard: true, contextmenu: true, fullscreen: true, visibility: true }, function (r) {
-        if (chrome.runtime.lastError) return;
-        const isCurrentlyOn = r.mouseleave || r.clipboard || r.contextmenu || r.fullscreen || r.visibility;
-        const newState = !isCurrentlyOn;
-        chrome.storage.local.set({ 
-          master: newState, mouseleave: newState, clipboard: newState, 
-          contextmenu: newState, fullscreen: newState, visibility: newState
-        }, () => {
-          if (chrome.runtime.lastError) return;
-          showToast(newState); 
-        });
-      });
-      return;
-    }
-
-    const premiumKeys = {
-      'KeyX': { appId: 'google', url: 'https://www.google.com/search?igu=1' },
-      'KeyC': { appId: 'chatgpt', url: 'https://chatgpt.com' },
-      'KeyV': { appId: 'deepseek', url: 'https://chat.deepseek.com' },
-      'KeyB': { appId: 'claude', url: 'https://claude.ai' }
-    };
-
-    if (premiumKeys[code]) {
-      e.preventDefault(); e.stopImmediatePropagation();
-      const app = premiumKeys[code];
-      try {
-        chrome.runtime.sendMessage({ action: 'open-window', appId: app.appId, url: app.url });
-      } catch (err) {
-        console.log("Extension vừa được reload, vui lòng F5 trang web.");
-      }
-      return;
-    }
-
-    if (code === 'KeyD') {
-      e.preventDefault(); e.stopImmediatePropagation();
-      try {
-        chrome.runtime.sendMessage({ action: 'close-windows' });
-      } catch (err) {
-        console.log("Extension vừa được reload, vui lòng F5 trang web.");
-      }
-      return;
-    }
+    send(hotkey);
   }, true);
 
 })();

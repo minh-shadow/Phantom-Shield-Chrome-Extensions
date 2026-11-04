@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<style>
+
+  :root {
+    --bg: #0f0f13;
+    --panel-bg: rgba(25, 25, 32, 0.7);
+    --text: #ffffff;
+    --text-muted: #8b8b9e;
+    --accent: #00f2fe;
+    --accent-glow: rgba(0, 242, 254, 0.4);
+    --shadow-dark: rgba(0, 0, 0, 0.8);
+    --shadow-light: rgba(255, 255, 255, 0.05);
+  }
+
+  * {
+
+    user-select: none;
+    -webkit-user-select: none;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+    background-color: var(--bg);
+
+    background-image:
+      radial-gradient(circle at 10% 20%, rgba(0, 242, 254, 0.05) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(79, 172, 254, 0.05) 0%, transparent 40%);
+    margin: 0;
+    padding: 20px;
+    min-width: 330px;
+    color: var(--text);
+    overflow: hidden;
+    perspective: 1000px;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #fff, #00f2fe);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 10px 20px var(--accent-glow);
+    transform: translateZ(30px);
+  }
+
+  .panel {
+    background: var(--panel-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    box-shadow:
+      0 20px 40px var(--shadow-dark),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 0 40px rgba(0, 242, 254, 0.05);
+    padding: 12px 0;
+    display: flex;
+    flex-direction: column;
+    transform-style: preserve-3d;
+    transition: transform 0.3s ease;
+  }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    transform-style: preserve-3d;
+  }
+
+  .row:last-child { border-bottom: none; }
+
+  .row:hover {
+    background: rgba(255, 255, 255, 0.02);
+    transform: translateZ(15px) scale(1.02);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    border-radius: 12px;
+  }
+
+  .feature-row.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+    filter: grayscale(1);
+    transform: translateZ(0);
+  }
+
+  .row.master {
+    background: linear-gradient(135deg, rgba(0, 242, 254, 0.1), transparent);
+    border: 1px solid rgba(0, 242, 254, 0.2);
+    margin: 0 10px 10px 10px;
+    border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(0, 242, 254, 0.1);
+  }
+  .row.master .label { font-size: 15px; font-weight: 700; color: var(--accent); }
+
+  .label {
+    font-size: 13.5px;
+    font-weight: 500;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+
+  .toggle {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .toggle input { opacity: 0; width: 0; height: 0; }
+
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: #121217;
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    border-radius: 28px;
+
+    box-shadow:
+      inset 5px 5px 10px rgba(0, 0, 0, 0.8),
+      inset -3px -3px 8px rgba(255, 255, 255, 0.05),
+      0 0 0 1px rgba(0,0,0,0.5);
+  }
+
+  .slider::before {
+    content: "";
+    position: absolute;
+    height: 20px;
+    width: 20px;
+    left: 4px;
+    bottom: 4px;
+    background: linear-gradient(145deg, #3a3a45, #25252d);
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    border-radius: 50%;
+
+    box-shadow:
+      3px 3px 6px rgba(0,0,0,0.7),
+      -1px -1px 3px rgba(255,255,255,0.1),
+      inset -2px -2px 5px rgba(0,0,0,0.5),
+      inset 2px 2px 5px rgba(255,255,255,0.2);
+  }
+
+  input:checked + .slider {
+    background: rgba(0, 242, 254, 0.15);
+    box-shadow:
+      inset 5px 5px 10px rgba(0,0,0,0.6),
+      inset -3px -3px 8px rgba(0, 242, 254, 0.3),
+      0 0 15px rgba(0, 242, 254, 0.2);
+  }
+
+  input:checked + .slider::before {
+    transform: translateX(22px);
+    background: linear-gradient(145deg, #00f2fe, #4facfe);
+    box-shadow:
+      0 0 15px var(--accent-glow),
+      4px 4px 8px rgba(0,0,0,0.6),
+      -1px -1px 3px rgba(255,255,255,0.3),
+      inset -2px -2px 5px rgba(0,0,0,0.3),
+      inset 2px 2px 5px rgba(255,255,255,0.5);
+  }
+
+  .shortcuts {
+    margin: 10px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .shortcut-title { font-size: 12px; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; text-align: center; font-weight: bold; letter-spacing: 1px; }
+  .shortcut-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; color: var(--text-muted); }
+  .shortcut-row:last-child { margin-bottom: 0; }
+  .key {
+    background: linear-gradient(180deg, #3a3a45, #25252d);
+    padding: 2px 8px; border-radius: 6px; font-weight: bold; color: white;
+    box-shadow: 0 2px 0 #111, 0 3px 5px rgba(0,0,0,0.5);
+    font-family: monospace; font-size: 11px;
+  }
+  .key.unbound { opacity: 0.45; }
+  .shortcut-hint { margin-top: 10px; font-size: 11px; line-height: 1.5; color: var(--text-muted); text-align: center; }
+  .shortcut-btn {
+    margin-top: 10px; width: 100%; padding: 9px 12px; border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), transparent); color: var(--accent);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; font-family: inherit;
+  }
+  .shortcut-btn:hover { background: rgba(0, 242, 254, 0.22); }
+</style>
+</head>
+<body>
+  <div class="header">
+    <span>🛡️ PHANTOM SHIELD</span>
+  </div>
+
+  <div class="panel">
+
+    <div class="row master">
+      <span class="label">BẬT/TẮT TẤT CẢ</span>
+      <label class="toggle">
+        <input type="checkbox" id="master">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="row feature-row">
+      <span class="label">Chặn Mouseleave / Out</span>
+      <label class="toggle"><input type="checkbox" id="mouseleave"><span class="slider"></span></label>
+    </div>
+
+    <div class="row feature-row">
+      <span class="label">Chặn Copy / Paste / Cut</span>
+      <label class="toggle"><input type="checkbox" id="clipboard"><span class="slider"></span></label>
+    </div>
+
+    <div class="row feature-row">
+      <span class="label">Chặn Chuột Phải</span>
+      <label class="toggle"><input type="checkbox" id="contextmenu"><span class="slider"></span></label>
+    </div>
+
+    <div class="row feature-row">
+      <span class="label">Giả Lập Full Màn Hình</span>
+      <label class="toggle"><input type="checkbox" id="fullscreen"><span class="slider"></span></label>
+    </div>
+
+    <div class="row feature-row">
+      <span class="label">Giả Lập Focus / Tab</span>
+      <label class="toggle"><input type="checkbox" id="visibility"><span class="slider"></span></label>
+    </div>
+  </div>
+
+    <div class="shortcuts">
+    <div class="shortcut-title">Premium Shortcuts</div>
+    <div class="shortcut-row"><span>Google Search (Win)</span><span class="key" data-cmd="open-google" data-default="Alt + X">Alt + X</span></div>
+    <div class="shortcut-row"><span>ChatGPT (Win)</span><span class="key" data-cmd="open-chatgpt" data-default="Alt + C">Alt + C</span></div>
+    <div class="shortcut-row"><span>DeepSeek (Win)</span><span class="key" data-cmd="open-deepseek" data-default="Alt + V">Alt + V</span></div>
+    <div class="shortcut-row"><span>Claude AI (Win)</span><span class="key" data-cmd="open-claude" data-default="Alt + B">Alt + B</span></div>
+    <div class="shortcut-row"><span>Đóng tất cả Cửa sổ</span><span class="key" data-cmd="close-windows" data-default="Alt + D">Alt + D</span></div>
+    <div class="shortcut-row" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;"><span>Bật/Tắt Toàn Bộ</span><span class="key" data-cmd="toggle-all" data-default="Alt + Z">Alt + Z</span></div>
+    <div class="shortcut-hint" id="shortcut-hint"></div>
+    <button type="button" class="shortcut-btn" id="open-shortcuts">Gán phím tắt toàn trình duyệt</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

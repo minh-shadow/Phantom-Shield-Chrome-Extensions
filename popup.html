@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  /* Cài đặt chung & Texture 3D */
+
   :root {
     --bg: #0f0f13;
     --panel-bg: rgba(25, 25, 32, 0.7);
@@ -16,7 +16,7 @@
   }
 
   * {
-    /* Chặn bôi đen copy text */
+
     user-select: none;
     -webkit-user-select: none;
     box-sizing: border-box;
@@ -25,8 +25,8 @@
   body {
     font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
     background-color: var(--bg);
-    /* Hiệu ứng nền không gian sâu thẳm */
-    background-image: 
+
+    background-image:
       radial-gradient(circle at 10% 20%, rgba(0, 242, 254, 0.05) 0%, transparent 40%),
       radial-gradient(circle at 90% 80%, rgba(79, 172, 254, 0.05) 0%, transparent 40%);
     margin: 0;
@@ -34,10 +34,9 @@
     min-width: 330px;
     color: var(--text);
     overflow: hidden;
-    perspective: 1000px; /* Tạo phối cảnh 3D cho toàn bộ trang */
+    perspective: 1000px;
   }
 
-  /* Tiêu đề 3D */
   .header {
     display: flex;
     align-items: center;
@@ -54,15 +53,14 @@
     transform: translateZ(30px);
   }
 
-  /* Khung chứa chính (Glassmorphism + 3D) */
   .panel {
     background: var(--panel-bg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 24px;
-    box-shadow: 
-      0 20px 40px var(--shadow-dark), 
+    box-shadow:
+      0 20px 40px var(--shadow-dark),
       inset 0 1px 0 rgba(255, 255, 255, 0.1),
       0 0 40px rgba(0, 242, 254, 0.05);
     padding: 12px 0;
@@ -72,7 +70,6 @@
     transition: transform 0.3s ease;
   }
 
-  /* Các dòng tính năng */
   .row {
     display: flex;
     justify-content: space-between;
@@ -84,16 +81,14 @@
   }
 
   .row:last-child { border-bottom: none; }
-  
-  /* Hiệu ứng nhấc lên khi hover */
-  .row:hover { 
-    background: rgba(255, 255, 255, 0.02); 
+
+  .row:hover {
+    background: rgba(255, 255, 255, 0.02);
     transform: translateZ(15px) scale(1.02);
     box-shadow: 0 10px 20px rgba(0,0,0,0.3);
     border-radius: 12px;
   }
 
-  /* Hiệu ứng mờ khi Master tắt */
   .feature-row.disabled {
     opacity: 0.3;
     pointer-events: none;
@@ -101,7 +96,6 @@
     transform: translateZ(0);
   }
 
-  /* Nút gạt Master */
   .row.master {
     background: linear-gradient(135deg, rgba(0, 242, 254, 0.1), transparent);
     border: 1px solid rgba(0, 242, 254, 0.2);
@@ -111,14 +105,13 @@
   }
   .row.master .label { font-size: 15px; font-weight: 700; color: var(--accent); }
 
-  .label { 
-    font-size: 13.5px; 
-    font-weight: 500; 
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5); 
-    pointer-events: none; /* Chặn click text */
+  .label {
+    font-size: 13.5px;
+    font-weight: 500;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    pointer-events: none;
   }
 
-  /* Tạo Nút Gạt 3D Cực Sâu (Neumorphism) */
   .toggle {
     position: relative;
     display: inline-block;
@@ -136,8 +129,8 @@
     background: #121217;
     transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     border-radius: 28px;
-    /* Lõm sâu 3D */
-    box-shadow: 
+
+    box-shadow:
       inset 5px 5px 10px rgba(0, 0, 0, 0.8),
       inset -3px -3px 8px rgba(255, 255, 255, 0.05),
       0 0 0 1px rgba(0,0,0,0.5);
@@ -153,19 +146,18 @@
     background: linear-gradient(145deg, #3a3a45, #25252d);
     transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     border-radius: 50%;
-    /* Nổi khối 3D */
-    box-shadow: 
-      3px 3px 6px rgba(0,0,0,0.7), 
+
+    box-shadow:
+      3px 3px 6px rgba(0,0,0,0.7),
       -1px -1px 3px rgba(255,255,255,0.1),
       inset -2px -2px 5px rgba(0,0,0,0.5),
       inset 2px 2px 5px rgba(255,255,255,0.2);
   }
 
-  /* Trạng thái khi Bật */
   input:checked + .slider {
     background: rgba(0, 242, 254, 0.15);
-    box-shadow: 
-      inset 5px 5px 10px rgba(0,0,0,0.6), 
+    box-shadow:
+      inset 5px 5px 10px rgba(0,0,0,0.6),
       inset -3px -3px 8px rgba(0, 242, 254, 0.3),
       0 0 15px rgba(0, 242, 254, 0.2);
   }
@@ -173,14 +165,14 @@
   input:checked + .slider::before {
     transform: translateX(22px);
     background: linear-gradient(145deg, #00f2fe, #4facfe);
-    box-shadow: 
-      0 0 15px var(--accent-glow), 
+    box-shadow:
+      0 0 15px var(--accent-glow),
       4px 4px 8px rgba(0,0,0,0.6),
       -1px -1px 3px rgba(255,255,255,0.3),
       inset -2px -2px 5px rgba(0,0,0,0.3),
       inset 2px 2px 5px rgba(255,255,255,0.5);
   }
-  /* Premium Shortcuts CSS */
+
   .shortcuts {
     margin: 10px;
     padding: 15px;
@@ -197,15 +189,23 @@
     box-shadow: 0 2px 0 #111, 0 3px 5px rgba(0,0,0,0.5);
     font-family: monospace; font-size: 11px;
   }
+  .key.unbound { opacity: 0.45; }
+  .shortcut-hint { margin-top: 10px; font-size: 11px; line-height: 1.5; color: var(--text-muted); text-align: center; }
+  .shortcut-btn {
+    margin-top: 10px; width: 100%; padding: 9px 12px; border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), transparent); color: var(--accent);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; font-family: inherit;
+  }
+  .shortcut-btn:hover { background: rgba(0, 242, 254, 0.22); }
 </style>
 </head>
 <body>
   <div class="header">
     <span>🛡️ PHANTOM SHIELD</span>
   </div>
-  
+
   <div class="panel">
-    <!-- Công tắc tổng -->
+
     <div class="row master">
       <span class="label">BẬT/TẮT TẤT CẢ</span>
       <label class="toggle">
@@ -214,12 +214,11 @@
       </label>
     </div>
 
-    <!-- Các tính năng con -->
     <div class="row feature-row">
       <span class="label">Chặn Mouseleave / Out</span>
       <label class="toggle"><input type="checkbox" id="mouseleave"><span class="slider"></span></label>
     </div>
-    
+
     <div class="row feature-row">
       <span class="label">Chặn Copy / Paste / Cut</span>
       <label class="toggle"><input type="checkbox" id="clipboard"><span class="slider"></span></label>
@@ -243,12 +242,14 @@
 
     <div class="shortcuts">
     <div class="shortcut-title">Premium Shortcuts</div>
-    <div class="shortcut-row"><span>Google Search (Win)</span><span class="key">Alt + X</span></div>
-    <div class="shortcut-row"><span>ChatGPT (Win)</span><span class="key">Alt + C</span></div>
-    <div class="shortcut-row"><span>DeepSeek (Win)</span><span class="key">Alt + V</span></div>
-    <div class="shortcut-row"><span>Claude AI (Win)</span><span class="key">Alt + B</span></div>
-    <div class="shortcut-row"><span>Đóng tất cả Cửa sổ</span><span class="key">Alt + D</span></div>
-    <div class="shortcut-row" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;"><span>Bật/Tắt Toàn Bộ</span><span class="key">Alt + Z</span></div>
+    <div class="shortcut-row"><span>Google Search (Win)</span><span class="key" data-cmd="open-google" data-default="Alt + X">Alt + X</span></div>
+    <div class="shortcut-row"><span>ChatGPT (Win)</span><span class="key" data-cmd="open-chatgpt" data-default="Alt + C">Alt + C</span></div>
+    <div class="shortcut-row"><span>DeepSeek (Win)</span><span class="key" data-cmd="open-deepseek" data-default="Alt + V">Alt + V</span></div>
+    <div class="shortcut-row"><span>Claude AI (Win)</span><span class="key" data-cmd="open-claude" data-default="Alt + B">Alt + B</span></div>
+    <div class="shortcut-row"><span>Đóng tất cả Cửa sổ</span><span class="key" data-cmd="close-windows" data-default="Alt + D">Alt + D</span></div>
+    <div class="shortcut-row" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;"><span>Bật/Tắt Toàn Bộ</span><span class="key" data-cmd="toggle-all" data-default="Alt + Z">Alt + Z</span></div>
+    <div class="shortcut-hint" id="shortcut-hint"></div>
+    <button type="button" class="shortcut-btn" id="open-shortcuts">Gán phím tắt toàn trình duyệt</button>
   </div>
 
   <script src="popup.js"></script>

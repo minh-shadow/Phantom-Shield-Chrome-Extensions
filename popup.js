@@ -1,4 +1,3 @@
-// Bảo mật: Chặn copy/paste/chuột phải
 ['copy', 'paste', 'cut', 'contextmenu'].forEach(eventType => {
   document.addEventListener(eventType, (e) => {
     e.preventDefault();
@@ -7,74 +6,114 @@
 });
 
 const keys = ['master', 'mouseleave', 'clipboard', 'contextmenu', 'fullscreen', 'visibility'];
-const featureRows = document.querySelectorAll('.feature-row');
-const masterToggle = document.getElementById('master');
-const featureToggles = Array.from(document.querySelectorAll('.feature-row input[type="checkbox"]'));
-
-// CỜ CHẶN: Ngăn sự kiện change tự động kích hoạt khi code đang cập nhật UI
-let isUpdatingUI = false; 
-
-function updateUI(config) {
-  isUpdatingUI = true; // Bật cờ lên
-
-  keys.forEach(k => {
-    const el = document.getElementById(k);
-    if (el) el.checked = config[k];
-  });
-  
-  featureRows.forEach(row => {
-    if (!config.master) row.classList.add('disabled');
-    else row.classList.remove('disabled');
-  });
-
-  // Tắt cờ sau một nhịp để DOM kịp render xong
-  setTimeout(() => { isUpdatingUI = false; }, 50);
-}
-
-// Khởi tạo UI ban đầu
-chrome.storage.local.get({
+const DEFAULTS = {
   master: true,
   mouseleave: true,
   clipboard: true,
   contextmenu: true,
   fullscreen: true,
   visibility: true
-}, updateUI);
+};
+const featureRows = document.querySelectorAll('.feature-row');
+const masterToggle = document.getElementById('master');
+const featureToggles = Array.from(document.querySelectorAll('.feature-row input[type="checkbox"]'));
 
-// Sự kiện khi NGƯỜI DÙNG bấm nút MASTER
+let isUpdatingUI = false;
+
+function updateUI(config) {
+  isUpdatingUI = true;
+
+  keys.forEach(k => {
+    const el = document.getElementById(k);
+    if (el) el.checked = !!config[k];
+  });
+
+  featureRows.forEach(row => {
+    if (!config.master) row.classList.add('disabled');
+    else row.classList.remove('disabled');
+  });
+
+  setTimeout(() => { isUpdatingUI = false; }, 50);
+}
+
+function refreshFromStorage() {
+  chrome.storage.local.get(DEFAULTS, updateUI);
+}
+
+refreshFromStorage();
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local') refreshFromStorage();
+});
+
 masterToggle.addEventListener('change', (e) => {
-  if (isUpdatingUI) return; // Nếu đang tự động cập nhật thì bỏ qua
+  if (isUpdatingUI) return;
 
   const isChecked = e.target.checked;
   const updateData = { master: isChecked };
-  
-  // Bật/tắt toàn bộ các nút con theo nút Master
+
   featureToggles.forEach(t => {
     t.checked = isChecked;
     updateData[t.id] = isChecked;
   });
 
-  chrome.storage.local.set(updateData, () => {
-    chrome.storage.local.get(keys, updateUI);
-  });
+  chrome.storage.local.set(updateData, refreshFromStorage);
 });
 
-// Sự kiện khi NGƯỜI DÙNG bấm từng nút CON
 featureToggles.forEach(t => {
   t.addEventListener('change', (e) => {
-    if (isUpdatingUI) return; // Nếu đang tự động cập nhật thì bỏ qua
+    if (isUpdatingUI) return;
 
     const isChecked = e.target.checked;
-    
+
     chrome.storage.local.set({ [t.id]: isChecked }, () => {
-      chrome.storage.local.get(keys, (config) => {
-        // Nếu người dùng bật 1 nút con mà nút Master đang tắt -> Tự động bật Master
-        if (isChecked && !config.master) {
-           config.master = true;
-           chrome.storage.local.set({ master: true });
+      chrome.storage.local.get(DEFAULTS, (config) => {
+
+        const anyOn = featureToggles.some(x => !!config[x.id]);
+        if (config.master !== anyOn) {
+          config.master = anyOn;
+          chrome.storage.local.set({ master: anyOn });
         }
         updateUI(config);
       });
     });
   });
+});
+
+
+const keyEls = Array.from(document.querySelectorAll('.key[data-cmd]'));
+const hintEl = document.getElementById('shortcut-hint');
+
+function prettyShortcut(s) {
+  return s.split('+').join(' + ');
+}
+
+function refreshShortcuts() {
+  chrome.commands.getAll((commands) => {
+    if (chrome.runtime.lastError) return;
+    const byName = {};
+    (commands || []).forEach((c) => { byName[c.name] = c.shortcut || ''; });
+    let missing = 0;
+    keyEls.forEach((el) => {
+      const assigned = byName[el.dataset.cmd];
+      if (assigned) {
+        el.textContent = prettyShortcut(assigned);
+        el.classList.remove('unbound');
+      } else {
+        el.textContent = el.dataset.default;
+        el.classList.add('unbound');
+        missing++;
+      }
+    });
+    hintEl.textContent = missing
+      ? 'Phím mờ chỉ hoạt động trong trang web. Gán phím ở nút bên dưới để dùng được cả khi đang ở thanh địa chỉ, DevTools, trang chrome:// hoặc chọn "Global" để dùng ngoài trình duyệt.'
+      : 'Đã gán đủ phím. Chọn "Global" ở trang gán phím nếu muốn dùng cả khi ngoài trình duyệt.';
+  });
+}
+
+refreshShortcuts();
+
+document.getElementById('open-shortcuts').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  window.close();
 });

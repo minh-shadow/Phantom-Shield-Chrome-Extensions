@@ -1,157 +1,123 @@
 (function () {
   'use strict';
 
-  const params = new URLSearchParams(new URL(document.currentScript.src).search);
-  const fakeFullscreen = params.get('fs') === 'true';
-  const fakeVisibility = params.get('vis') === 'true';
+  var GUARD = Symbol.for('phantom.shield.spoof.v2');
+  if (window[GUARD]) return;
+  try { Object.defineProperty(window, GUARD, { value: true, enumerable: false }); }
+  catch (e) { window[GUARD] = true; }
 
-  // ==========================================
-  // 1. ÉP BUỘC TOÀN MÀN HÌNH (Fullscreen Spoof)
-  // ==========================================
-  if (fakeFullscreen) {
-    const fakeEl = document.documentElement || document.body || document.createElement('div');
-    
-    // Hàm ghi đè cực mạnh (ghi đè thẳng vào instance document và window)
-    const forceProperty = (obj, prop, value) => {
-      try {
-        Object.defineProperty(obj, prop, { get: () => value, configurable: true });
-      } catch (e) {}
-    };
+  var EV_CFG = '__ps_cfg_v2';
+  var EV_REQ = '__ps_req_v2';
+  var NARROW_PX = 700;
 
-    // Ghi đè fullscreenElement lên document instance
-    forceProperty(document, 'fullscreenElement', fakeEl);
-    forceProperty(document, 'webkitFullscreenElement', fakeEl);
-    forceProperty(document, 'mozFullScreenElement', fakeEl);
-    forceProperty(document, 'msFullscreenElement', fakeEl);
+  var state = { fullscreen: true, visibility: true };
 
-    // Ghi đè fullscreenEnabled (Báo cho web biết tính năng này được bật)
-    forceProperty(document, 'fullscreenEnabled', true);
-    forceProperty(document, 'webkitFullscreenEnabled', true);
-    forceProperty(document, 'mozFullScreenEnabled', true);
-    forceProperty(document, 'msFullscreenEnabled', true);
-
-    // Ghi đè kích thước cửa sổ (luôn bằng màn hình)
-    const w = window.screen.width;
-    const h = window.screen.height;
-    forceProperty(window, 'innerWidth', w);
-    forceProperty(window, 'innerHeight', h);
-    forceProperty(window, 'outerWidth', w);
-    forceProperty(window, 'outerHeight', h);
-
-    // Ghi đè lên cả Prototype để phòng hờ trang web check qua Prototype
+  function onCfg(e) {
     try {
-      Object.defineProperty(Document.prototype, 'fullscreenElement', { get: () => fakeEl, configurable: true });
-      Object.defineProperty(Document.prototype, 'webkitFullscreenElement', { get: () => fakeEl, configurable: true });
-      Object.defineProperty(Window.prototype, 'innerWidth', { get: () => w, configurable: true });
-      Object.defineProperty(Window.prototype, 'innerHeight', { get: () => h, configurable: true });
+      var c = JSON.parse(e.detail);
+      state.fullscreen = !!c.fullscreen;
+      state.visibility = !!c.visibility;
+    } catch (err) {}
+  }
+  window.addEventListener(EV_CFG, onCfg);
+
+  try {
+    new MutationObserver(function () {
+      window.addEventListener(EV_CFG, onCfg);
+    }).observe(document, { childList: true });
+  } catch (e) {}
+
+  function findDesc(obj, prop) {
+    var cur = obj;
+    while (cur) {
+      var d = Object.getOwnPropertyDescriptor(cur, prop);
+      if (d) return d;
+      cur = Object.getPrototypeOf(cur);
+    }
+    return null;
+  }
+
+  function hookGetter(target, prop, isActive, fake) {
+    try {
+      var orig = findDesc(target, prop);
+      if (!orig) return;
+      if (orig.configurable === false) return;
+      var origGet = orig.get;
+      Object.defineProperty(target, prop, {
+        configurable: true,
+        enumerable: orig.enumerable,
+        get: function () {
+          if (isActive()) return fake.call(this);
+          return origGet ? origGet.call(this) : orig.value;
+        },
+        set: orig.set
+      });
     } catch (e) {}
   }
 
-  // ==========================================
-  // 2. CHẶN PAGE VISIBILITY & FOCUS (Code của bạn)
-  // ==========================================
-  if (fakeVisibility) {
-    function normalizeEventHandler(handler) {
-      return typeof handler === 'function' ? handler : null;
-    }
-    function getOwnDescriptor(obj, prop) {
-      return Object.getOwnPropertyDescriptor(obj, prop);
-    }
-    function overrideGetter(proto, prop, value) {
-      var original = getOwnDescriptor(proto, prop);
-      if (!original || original.configurable === false) return;
-      Object.defineProperty(proto, prop, {
-        configurable: original.configurable,
-        enumerable: original.enumerable,
-        get: function () { return value; }
-      });
-    }
-    function findDescriptor(obj, prop) {
-      var current = obj;
-      while (current) {
-        var desc = Object.getOwnPropertyDescriptor(current, prop);
-        if (desc) return desc;
-        current = Object.getPrototypeOf(current);
-      }
-      return null;
-    }
-    function overrideDocumentEventHandler(prop) {
-      var original = getOwnDescriptor(Document.prototype, prop);
-      var handlers = new WeakMap();
-      if (!original || original.configurable === false) return;
-      Object.defineProperty(Document.prototype, prop, {
-        configurable: original.configurable,
-        enumerable: original.enumerable,
-        get: function () { return handlers.has(this) ? handlers.get(this) : null; },
-        set: function (handler) { handlers.set(this, normalizeEventHandler(handler)); }
-      });
-    }
-    function overrideWindowEventHandler(prop) {
-      var original = findDescriptor(window, prop);
-      var stored = null;
-      if (!original || original.configurable === false) return;
-      Object.defineProperty(window, prop, {
-        configurable: true,
-        enumerable: original.enumerable,
-        get: function () { return stored; },
-        set: function (handler) { stored = normalizeEventHandler(handler); }
-      });
-    }
+  var visActive = function () { return state.visibility; };
+  var fsActive = function () { return state.fullscreen; };
 
-    /* Page Visibility API */
-    overrideGetter(Document.prototype, 'hidden', false);
-    overrideGetter(Document.prototype, 'visibilityState', 'visible');
-    overrideGetter(Document.prototype, 'webkitHidden', false);
-    overrideGetter(Document.prototype, 'webkitVisibilityState', 'visible');
+  hookGetter(Document.prototype, 'hidden', visActive, function () { return false; });
+  hookGetter(Document.prototype, 'visibilityState', visActive, function () { return 'visible'; });
+  hookGetter(Document.prototype, 'webkitHidden', visActive, function () { return false; });
+  hookGetter(Document.prototype, 'webkitVisibilityState', visActive, function () { return 'visible'; });
 
-    /* document.onvisibilitychange = fn */
-    overrideDocumentEventHandler('onvisibilitychange');
-
-    /* document.hasFocus() */
-    var originalHasFocus = Document.prototype.hasFocus;
-    var originalHasFocusDescriptor = getOwnDescriptor(Document.prototype, 'hasFocus');
-    if (typeof originalHasFocus === 'function' && (!originalHasFocusDescriptor || originalHasFocusDescriptor.configurable !== false)) {
+  try {
+    var hfDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'hasFocus');
+    var origHasFocus = hfDesc && hfDesc.value;
+    if (typeof origHasFocus === 'function' && hfDesc.configurable !== false) {
       Object.defineProperty(Document.prototype, 'hasFocus', {
-        configurable: originalHasFocusDescriptor ? originalHasFocusDescriptor.configurable : true,
-        enumerable: originalHasFocusDescriptor ? originalHasFocusDescriptor.enumerable : true,
-        writable: originalHasFocusDescriptor ? originalHasFocusDescriptor.writable : true,
-        value: function hasFocus() { return true; }
-      });
-    }
-
-    /* EventTarget.prototype.addEventListener */
-    var originalAddEvent = EventTarget.prototype.addEventListener;
-    var originalAddEventDescriptor = getOwnDescriptor(EventTarget.prototype, 'addEventListener');
-
-    function shouldBlockEventListener(target, type) {
-      if (type === 'visibilitychange') return target === document || target === window;
-      if (type === 'blur' || type === 'focus') return target === window;
-      return false;
-    }
-
-    if (typeof originalAddEvent === 'function' && (!originalAddEventDescriptor || originalAddEventDescriptor.configurable !== false)) {
-      Object.defineProperty(EventTarget.prototype, 'addEventListener', {
-        configurable: originalAddEventDescriptor ? originalAddEventDescriptor.configurable : true,
-        enumerable: originalAddEventDescriptor ? originalAddEventDescriptor.enumerable : true,
-        writable: originalAddEventDescriptor ? originalAddEventDescriptor.writable : true,
-        value: function addEventListener(type, listener, options) {
-          if (shouldBlockEventListener(this, type)) return;
-          return originalAddEvent.call(this, type, listener, options);
+        configurable: true,
+        enumerable: hfDesc.enumerable,
+        writable: hfDesc.writable,
+        value: function hasFocus() {
+          return state.visibility ? true : origHasFocus.call(this);
         }
       });
     }
+  } catch (e) {}
 
-    /* window.onvisibilitychange / window.onblur / window.onfocus */
-    overrideWindowEventHandler('onvisibilitychange');
-    overrideWindowEventHandler('onblur');
-    overrideWindowEventHandler('onfocus');
+  var fakeFsEl = function () { return document.documentElement; };
 
-    /* Safety net capture phase */
-    if (originalAddEvent) {
-      originalAddEvent.call(window, 'visibilitychange', function (event) { event.stopImmediatePropagation(); }, true);
-      originalAddEvent.call(document, 'visibilitychange', function (event) { event.stopImmediatePropagation(); }, true);
-      originalAddEvent.call(window, 'blur', function (event) { event.stopImmediatePropagation(); }, true);
-      originalAddEvent.call(window, 'focus', function (event) { event.stopImmediatePropagation(); }, true);
-    }
+  ['fullscreenElement', 'webkitFullscreenElement', 'webkitCurrentFullScreenElement',
+   'mozFullScreenElement', 'msFullscreenElement'].forEach(function (p) {
+
+    var d = findDesc(Document.prototype, p);
+    var realGet = d && d.get;
+    hookGetter(Document.prototype, p, function () {
+      if (!state.fullscreen) return false;
+      try { if (realGet && realGet.call(document)) return false; } catch (e) {}
+      return true;
+    }, fakeFsEl);
+  });
+
+  ['fullscreenEnabled', 'webkitFullscreenEnabled', 'mozFullScreenEnabled', 'msFullscreenEnabled']
+    .forEach(function (p) {
+      hookGetter(Document.prototype, p, fsActive, function () { return true; });
+    });
+
+  var sizeProps = ['innerWidth', 'innerHeight', 'outerWidth', 'outerHeight'];
+  var realSize = {};
+  sizeProps.forEach(function (p) {
+    var d = findDesc(window, p);
+    realSize[p] = function () {
+      if (!d) return 0;
+      return d.get ? d.get.call(window) : d.value;
+    };
+  });
+
+  var isTop = (function () { try { return window === window.top; } catch (e) { return false; } })();
+
+  function sizeActive() {
+    return state.fullscreen && isTop && realSize.innerWidth() >= NARROW_PX;
   }
+
+  hookGetter(window, 'innerWidth', sizeActive, function () { return window.screen.width; });
+  hookGetter(window, 'innerHeight', sizeActive, function () { return window.screen.height; });
+  hookGetter(window, 'outerWidth', sizeActive, function () { return window.screen.width; });
+  hookGetter(window, 'outerHeight', sizeActive, function () { return window.screen.height; });
+
+  try { window.dispatchEvent(new CustomEvent(EV_REQ)); } catch (e) {}
 })();
+
